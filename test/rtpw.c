@@ -84,6 +84,8 @@
 #include <arpa/inet.h>
 #endif
 
+#define RTPW_USE_WINSOCK2
+
 #include "srtp.h"
 #include "rtp.h"
 #include "util.h"
