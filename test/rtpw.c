@@ -113,8 +113,6 @@ void usage(char *prog_name);
  * leave_group(...) de-registers from a multicast group
  */
 
-void leave_group(int sock, struct ip_mreq mreq, char *name);
-
 /*
  * setup_signal_handler() sets up a signal handler to trigger
  * cleanups after an interrupt
@@ -141,7 +139,6 @@ int main(int argc, char *argv[])
     int sock, ret;
     struct in_addr rcvr_addr;
     struct sockaddr_in name;
-    struct ip_mreq mreq;
 #if BEW
     struct sockaddr_in local;
 #endif
@@ -332,29 +329,6 @@ int main(int argc, char *argv[])
     name.sin_family = PF_INET;
     name.sin_port = htons(port);
 
-    if (ADDR_IS_MULTICAST(rcvr_addr.s_addr)) {
-        if (prog_type == sender) {
-            ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
-                             sizeof(ttl));
-            if (ret < 0) {
-                fprintf(stderr, "%s: Failed to set TTL for multicast group",
-                        argv[0]);
-                perror("");
-                exit(1);
-            }
-        }
-
-        mreq.imr_multiaddr.s_addr = rcvr_addr.s_addr;
-        mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-        ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)&mreq,
-                         sizeof(mreq));
-        if (ret < 0) {
-            fprintf(stderr, "%s: Failed to join multicast group", argv[0]);
-            perror("");
-            exit(1);
-        }
-    }
-
     /* report security services selected on the command line */
     printf("security services: ");
     if (sec_servs & sec_serv_conf)
@@ -520,6 +494,8 @@ int main(int argc, char *argv[])
         policy.next = NULL;
     }
 
+
+    //-----------------------------------------------------------------------------------
     if (prog_type == sender) {
 #if BEW
         /* bind to local socket (to match crypto policy, if need be) */
@@ -551,10 +527,6 @@ int main(int argc, char *argv[])
         /* open dictionary */
         dict = fopen(dictfile, "r");
         if (dict == NULL) {
-            fprintf(stderr, "%s: couldn't open file %s\n", argv[0], dictfile);
-            if (ADDR_IS_MULTICAST(rcvr_addr.s_addr)) {
-                leave_group(sock, mreq, argv[0]);
-            }
             exit(1);
         }
 
@@ -579,13 +551,6 @@ int main(int argc, char *argv[])
         rtp_receiver_t rcvr;
 
         if (bind(sock, (struct sockaddr *)&name, sizeof(name)) < 0) {
-            close(sock);
-            fprintf(stderr, "%s: socket bind error\n", argv[0]);
-            perror(NULL);
-            if (ADDR_IS_MULTICAST(rcvr_addr.s_addr)) {
-                leave_group(sock, mreq, argv[0]);
-            }
-            exit(1);
         }
 
         rcvr = rtp_receiver_alloc();
@@ -610,10 +575,6 @@ int main(int argc, char *argv[])
 
         rtp_receiver_deinit_srtp(rcvr);
         rtp_receiver_dealloc(rcvr);
-    }
-
-    if (ADDR_IS_MULTICAST(rcvr_addr.s_addr)) {
-        leave_group(sock, mreq, argv[0]);
     }
 
 #ifdef RTPW_USE_WINSOCK2
@@ -657,18 +618,6 @@ void usage(char *string)
            "       -w <wordsfile> use <wordsfile> for input, rather than %s\n",
            string, string, DICT_FILE);
     exit(1);
-}
-
-void leave_group(int sock, struct ip_mreq mreq, char *name)
-{
-    int ret;
-
-    ret = setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (void *)&mreq,
-                     sizeof(mreq));
-    if (ret < 0) {
-        fprintf(stderr, "%s: Failed to leave multicast group", name);
-        perror("");
-    }
 }
 
 void handle_signal(int signum)
